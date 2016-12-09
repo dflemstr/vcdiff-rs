@@ -1,0 +1,15 @@
+[package]
+authors = ["David Flemström <david.flemstrom@gmail.com>"]
+description = "High-level bindings to open-vcdiff, a codec for the VCDIFF binary delta format."
+homepage = "https://github.com/dflemstr/vcdiff-rs"
+license = "Apache-2.0"
+name = "vcdiff"
+repository = "https://github.com/dflemstr/vcdiff-rs"
+version = "0.1.0"
+
+[dependencies]
+bitflags = "0.7.0"
+
+[dependencies.open-vcdiff-sys]
+path = "open-vcdiff-sys"
+version = "0.1.0"
