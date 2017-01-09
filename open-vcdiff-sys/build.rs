@@ -17,6 +17,7 @@ fn main() {
     config.cpp(true);
     config.include("open-vcdiff/src");
     config.include("src");
+    config.include("src/zlib");
     config.flag("-Wno-deprecated-declarations");
 
     if include_exists("ext/rope") {
