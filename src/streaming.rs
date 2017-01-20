@@ -93,11 +93,39 @@ impl<'d> Decoder<'d> {
         // Decoder is ready to use
         Decoder{
             decoder: decoder,
-            dictionary: PhantomData
+            dictionary: PhantomData,
         }
     }
 
-    pub fn set_maximum_target_file_size(&mut self, size: usize) -> Result<()> {
+    pub fn with_options(
+        dictionary: &'d [u8],
+        maximum_target_file_size: usize,
+        maximum_target_window_size: usize,
+        allow_vcd_target: bool
+    ) -> Result<Decoder<'d>> {
+        // make a new decoder
+        // this is C++ "operator new" under the hood
+        let decoder = unsafe { open_vcdiff_sys::new_decoder() };
+
+        // wrap it in a decoder object
+        let mut decoder = Decoder{
+            decoder: decoder,
+            dictionary: PhantomData,
+        };
+
+        // set options, since we need to do that before start_decoding()
+        decoder.set_maximum_target_file_size(maximum_target_file_size)?;
+        decoder.set_maximum_target_window_size(maximum_target_window_size)?;
+        decoder.set_allow_vcd_target(allow_vcd_target)?;
+
+        // point it to the dictionary buffer
+        unsafe { open_vcdiff_sys::decoder_start_decoding(decoder.decoder, dictionary.as_ptr() as *const i8, dictionary.len()) }
+
+        // return the decoder
+        Ok(decoder)
+    }
+
+    fn set_maximum_target_file_size(&mut self, size: usize) -> Result<()> {
         if unsafe {
             open_vcdiff_sys::decoder_set_maximum_target_file_size(self.decoder, size)
         } {
@@ -107,7 +135,7 @@ impl<'d> Decoder<'d> {
         }
     }
 
-    pub fn set_maximum_target_window_size(&mut self, size: usize) -> Result<()> {
+    fn set_maximum_target_window_size(&mut self, size: usize) -> Result<()> {
         if unsafe {
             open_vcdiff_sys::decoder_set_maximum_target_window_size(self.decoder, size)
         } {
@@ -117,7 +145,7 @@ impl<'d> Decoder<'d> {
         }
     }
 
-    pub fn set_allow_vcd_target(&mut self, allow: bool) -> Result<()> {
+    fn set_allow_vcd_target(&mut self, allow: bool) -> Result<()> {
         unsafe {
             open_vcdiff_sys::decoder_set_allow_vcd_target(self.decoder, allow);
         }
@@ -167,5 +195,76 @@ impl<'d> Drop for Decoder<'d> {
     {
         // run C++ "operator delete" on the decoder we hold
         unsafe { open_vcdiff_sys::delete_decoder(self.decoder); }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    mod decoder {
+        use streaming::*;
+
+        #[test]
+        fn create_and_destroy() {
+            // creating and destroying a Decoder with an empty dictionary should not panic
+            Decoder::new(b"");
+        }
+
+        #[test]
+        fn create_and_destroy_with_options() {
+            // setting some options shouldn't break
+            Decoder::with_options(b"", 10 << 20, 10 << 20, false).expect("with_options()");
+        }
+
+        #[test]
+        fn test_finish_after_decoding_nothing() {
+            // it's legal to finish decoding nothing
+            let mut decoder = Decoder::new(b"");
+            let mut out: Vec<u8> = Vec::new();
+            decoder.decode(b"", &mut out).expect("decode");
+            decoder.finish().expect("success");
+        }
+
+        #[test]
+        fn test_finish_without_decoding() {
+            // it's not normally legal to finish without starting the decode, but we make it so
+            let decoder = Decoder::new(b"");
+            decoder.finish().expect("success");
+        }
+
+        #[test]
+        fn test_decode_garbage() {
+            let mut decoder = Decoder::new(b"");
+            let mut output: Vec<u8> = Vec::new();
+
+            // attempt to decode something that's not a VCD header
+            // this should fail immediately
+            match decoder.decode(b"VCD", &mut output) {
+                Ok(()) => { panic!("expected decode to fail") }
+                Err(_) => {}
+            }
+
+            // and the output should still be empty
+            assert_eq!(output.len(), 0);
+        }
+
+        #[test]
+        fn test_finish_with_partial_buffer() {
+            let mut decoder = Decoder::new(b"");
+            let mut output: Vec<u8> = Vec::new();
+
+            // decode just the start of a valid header
+            // this should succeed...
+            decoder.decode(b"\xD6\xC3", &mut output).expect("decode");
+
+            // ...but not write anything to the output
+            assert_eq!(output.len(), 0);
+
+            // finishing should fail, since there's undecoded bits in the input buffer
+            match decoder.finish() {
+                Ok(()) => { panic!("expected finish to fail"); }
+                Err(_) => {}
+            }
+        }
     }
 }
