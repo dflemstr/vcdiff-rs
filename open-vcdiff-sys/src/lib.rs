@@ -55,17 +55,75 @@ pub enum VCDiffFormatExtensionFlagValues {
     VCD_FORMAT_JSON = 4,
 }
 pub type VCDiffFormatExtensionFlags = ::std::os::raw::c_int;
+
+#[repr(C)]
+#[derive(Debug, Copy)]
+pub struct callback_decoder {
+    pub _address: u8,
+}
+impl Clone for callback_decoder {
+    fn clone(&self) -> Self { *self }
+}
+
+pub type output_callback_append_fn =
+::std::option::Option<unsafe extern "C" fn(arg1:
+                                           *mut ::std::os::raw::c_void,
+                                           arg2:
+                                           *const uint8_t,
+                                           arg3: usize)>;
+pub type output_callback_clear_fn =
+::std::option::Option<unsafe extern "C" fn(arg1:
+                                           *mut ::std::os::raw::c_void)>;
+pub type output_callback_reserve_fn =
+::std::option::Option<unsafe extern "C" fn(arg1:
+                                           *mut ::std::os::raw::c_void,
+                                           arg2: usize)>;
+pub type output_callback_size_fn =
+::std::option::Option<unsafe extern "C" fn(arg1:
+                                           *const ::std::os::raw::c_void)
+                                           -> usize>;
+
 extern "C" {
+    pub fn new_decoder() -> *mut ::std::os::raw::c_void;
+    pub fn decoder_start_decoding(decoder: *mut ::std::os::raw::c_void,
+                                  dictionary_ptr:
+                                  *const ::std::os::raw::c_char,
+                                  dictionary_size: usize);
+    pub fn decoder_set_maximum_target_file_size(decoder:
+                                                *mut ::std::os::raw::c_void,
+                                                new_maximum_target_file_size:
+                                                usize) -> bool;
+    pub fn decoder_set_maximum_target_window_size(decoder:
+                                                  *mut ::std::os::raw::c_void,
+                                                  new_maximum_target_window_size:
+                                                  usize) -> bool;
+    pub fn decoder_set_allow_vcd_target(decoder: *mut ::std::os::raw::c_void,
+                                        allow_vcd_target: bool);
+    pub fn decoder_decode_chunk_to_callbacks(decoder:
+                                             *mut ::std::os::raw::c_void,
+                                             data:
+                                             *const ::std::os::raw::c_char,
+                                             len: usize,
+                                             pointer:
+                                             *mut ::std::os::raw::c_void,
+                                             append_fn:
+                                             output_callback_append_fn,
+                                             clear_fn:
+                                             output_callback_clear_fn,
+                                             reserve_fn:
+                                             output_callback_reserve_fn,
+                                             size_fn: output_callback_size_fn)
+                                             -> bool;
+    pub fn decoder_finish_decoding(decoder: *mut ::std::os::raw::c_void)
+                                   -> bool;
+    pub fn delete_decoder(decoder: *mut ::std::os::raw::c_void);
+
     #[link_name = "vcdiff_encode"]
     pub fn encode(dictionary_data: *const uint8_t, dictionary_len: size_t,
                   target_data: *const uint8_t, target_len: size_t,
                   encoded_data: *mut *mut uint8_t, encoded_len: *mut size_t,
                   flags: VCDiffFormatExtensionFlags,
                   look_for_target_matches: u8);
-    #[link_name = "vcdiff_decode"]
-    pub fn decode(dictionary_data: *const uint8_t, dictionary_len: size_t,
-                  encoded_data: *const uint8_t, encoded_len: size_t,
-                  target_data: *mut *mut uint8_t, target_len: *mut size_t);
     #[link_name = "vcdiff_free_data"]
     pub fn free_data(data: *const uint8_t);
 }
