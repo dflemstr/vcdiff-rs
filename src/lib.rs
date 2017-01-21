@@ -2,6 +2,10 @@
 extern crate bitflags;
 extern crate open_vcdiff_sys;
 
+mod streaming;
+
+pub use streaming::{Error,Result,Output,Decoder};
+
 use std::os;
 use std::ptr;
 
@@ -57,28 +61,17 @@ pub fn encode(dictionary: &[u8], target: &[u8], format_extensions: FormatExtensi
     result
 }
 
+/// Decodes `encoded` using `dictionary` in a one-shot operation.
+///
+/// This function will panic if decoding fails. For more control, use the `Decoder` interface.
 pub fn decode(dictionary: &[u8], encoded: &[u8]) -> Vec<u8> {
-    let mut target_data = ptr::null_mut();
-    let mut target_len = 0;
+    let mut output: Vec<u8> = Vec::new();
+    let mut decoder = Decoder::new(dictionary);
 
-    unsafe {
-        open_vcdiff_sys::decode(dictionary.as_ptr(),
-                                dictionary.len(),
-                                encoded.as_ptr(),
-                                encoded.len(),
-                                &mut target_data,
-                                &mut target_len);
-    }
+    decoder.decode(encoded, &mut output).expect("decode");
+    decoder.finish().expect("finish");
 
-    let mut result = Vec::with_capacity(target_len);
-
-    unsafe {
-        ptr::copy_nonoverlapping(target_data, result.as_mut_ptr(), target_len);
-        result.set_len(target_len);
-        open_vcdiff_sys::free_data(target_data);
-    }
-
-    result
+    output
 }
 
 #[cfg(test)]
